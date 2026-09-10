@@ -1,7 +1,8 @@
 import { coletarTudo } from "./coleta.js";
 import { avaliar, selecionar } from "./core/rules.js";
-import { carregarEstado, jaAlertado, marcarAlertado, registrarHistorico, salvarEstado } from "./core/state.js";
-import { avisarQuebra, credenciais, enviar, formatarOferta, montarMensagem } from "./notify/telegram.js";
+import { carregarEstado, jaAlertado, registrarHistorico, salvarEstado } from "./core/state.js";
+import { despachar } from "./notify/despachar.js";
+import { avisarQuebra, formatarOferta } from "./notify/telegram.js";
 
 const args = new Set(process.argv.slice(2));
 const dryRun = args.has("--dry-run");
@@ -28,18 +29,16 @@ if (dryRun) {
   process.exit(erros.length > 0 ? 1 : 0);
 }
 
-if (novas.length > 0) {
-  if (credenciais()) {
-    await enviar(montarMensagem(novas, `Livelo — ${novas.length} oportunidade(s)`));
-  } else {
-    console.warn("\nTelegram não configurado: nada enviado.");
-  }
-
-  for (const a of novas) marcarAlertado(estado, a.oferta, agora);
-}
+erros.push(...(await despachar(novas, estado, `Livelo — ${novas.length} oportunidade(s)`, agora)));
 
 await salvarEstado(estado);
 await registrarHistorico(avaliadas, agora);
-await avisarQuebra(erros);
+
+// O aviso de quebra usa o mesmo canal que pode ter falhado: não deixar derrubar a rodada.
+try {
+  await avisarQuebra(erros);
+} catch (erro) {
+  console.error(`não foi possível avisar sobre a quebra: ${erro instanceof Error ? erro.message : String(erro)}`);
+}
 
 process.exit(erros.length > 0 ? 1 : 0);
