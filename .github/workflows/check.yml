@@ -1,0 +1,43 @@
+name: check
+
+# A cada 30 min. O GitHub atrasa cron em horário de pico; para promoção de 24h
+# isso é irrelevante.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+# Um único job por vez: dois em paralelo brigariam pelo commit de state/.
+concurrency:
+  group: livelo-check
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      # Roda mesmo se o check falhou: uma fonte quebrada não pode fazer perder o
+      # dedupe do que já foi alertado nesta rodada.
+      - if: always()
+        run: |
+          git config user.name  "livelo-alertas"
+          git config user.email "actions@github.com"
+          git add state history
+          git diff --cached --quiet && exit 0
+          git commit -m "estado: $(date -u +%Y-%m-%dT%H:%MZ)"
+          git pull --rebase --autostash
+          git push
