@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   extrairTiers,
-  parseListaParceiros,
+  parseSitemapParceiros,
   parsePaginaParceiro,
   tierSeAplica,
   type ParceiroTransferencia,
@@ -11,18 +11,40 @@ import {
 
 const fixture = (nome: string) => readFileSync(new URL(`./fixtures/${nome}`, import.meta.url), "utf8");
 
-const parceiro = (nome: string, skuid: string): ParceiroTransferencia => ({
+const parceiro = (nome: string, skuid: string, slug = nome.toLowerCase()): ParceiroTransferencia => ({
   skuid,
+  slug,
   nome,
-  url: `https://www.livelo.com.br/livelo-para-parceiros/${skuid}`,
+  url: `https://www.livelo.com.br/livelo-para-parceiros/${slug}/${skuid}`,
 });
 
-describe("parseListaParceiros", () => {
-  it("lê os parceiros de transferência ativos", () => {
-    const lista = parseListaParceiros(fixture("transfer-lista-parceiros.html"));
-    expect(lista.length).toBe(15);
-    expect(lista.map((p) => p.nome)).toContain("Smiles");
-    expect(lista.every((p) => p.url.startsWith("https://"))).toBe(true);
+describe("parseSitemapParceiros", () => {
+  const sitemap = readFileSync(new URL("./fixtures/sitemap-static.xml", import.meta.url), "utf8");
+
+  it("descobre os parceiros de transferência pelo sitemap", () => {
+    const lista = parseSitemapParceiros(sitemap);
+    expect(lista.length).toBeGreaterThanOrEqual(15);
+    expect(lista.map((p: ParceiroTransferencia) => p.skuid)).toContain("SMLTransfer");
+    expect(lista.every((p: ParceiroTransferencia) => p.url.startsWith("https://"))).toBe(true);
+  });
+
+  it("extrai slug e sku de cada URL", () => {
+    const azul = parseSitemapParceiros(sitemap).find((p: ParceiroTransferencia) => p.skuid === "AZLTransfer");
+    expect(azul).toMatchObject({ slug: "azul", skuid: "AZLTransfer" });
+  });
+
+  it("ignora a página índice, que não tem sku", () => {
+    const lista = parseSitemapParceiros(
+      "<urlset><url><loc>https://www.livelo.com.br/livelo-para-parceiros</loc></url></urlset>",
+    );
+    expect(lista).toEqual([]);
+  });
+
+  it("ignora URLs de outras seções do site", () => {
+    const lista = parseSitemapParceiros(
+      "<urlset><url><loc>https://www.livelo.com.br/juntar-pontos/todos-os-parceiros</loc></url></urlset>",
+    );
+    expect(lista).toEqual([]);
   });
 });
 
@@ -76,6 +98,28 @@ describe("parsePaginaParceiro", () => {
   it("não inventa campanha quando os campos estão vazios", () => {
     const oferta = parsePaginaParceiro(fixture("transfer-smiles-sem-campanha.html"), parceiro("Smiles", "SMLSkuTransfer"));
     expect(oferta).toBeNull();
+  });
+
+  it("devolve null para URL órfã do sitemap, sem tratar como quebra", () => {
+    // copa/COPTransfer responde 200 mas não é página de parceiro: nem API, nem campanha.
+    const oferta = parsePaginaParceiro(fixture("transfer-url-orfa.html"), parceiro("Copa", "COPTransfer", "copa"));
+    expect(oferta).toBeNull();
+  });
+
+  it("reclama quando a API está lá mas o objeto campaign sumiu", () => {
+    const html = fixture("transfer-azul-com-campanha.html").replace(/"campaign"/g, '"campanhaRenomeada"');
+    expect(() => parsePaginaParceiro(html, parceiro("Azul Fidelidade", "AZLSkuTransfer", "azul"))).toThrow(
+      /campaign não encontrado/,
+    );
+  });
+
+  it("usa o nome vindo da API da página, não o do sitemap", () => {
+    const oferta = parsePaginaParceiro(
+      fixture("transfer-azul-com-campanha.html"),
+      { skuid: "AZLTransfer", slug: "azul", url: "https://exemplo" },
+    )!;
+    expect(oferta.parceiro).toBe("Azul Fidelidade");
+    expect(oferta.programa).toBe("azul");
   });
 
   it("trata placeholder {{bonus}} como ausência de campanha", () => {

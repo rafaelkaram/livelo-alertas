@@ -26,7 +26,7 @@ const umAlerta = (): Avaliacao =>
 
 describe("despachar", () => {
   it("marca como alertado depois de enviar", async () => {
-    const estado = { alertados: {} };
+    const estado: { alertados: Record<string, string> } = { alertados: {} };
     const enviar = vi.fn(async () => {});
     const alerta = umAlerta();
 
@@ -40,7 +40,7 @@ describe("despachar", () => {
   it("não marca nada quando o Telegram não está configurado", async () => {
     // O bug que fez a primeira configuração real perder os alertas do dia: as rodadas
     // agendadas antes dos secrets marcavam tudo como avisado e não enviavam.
-    const estado = { alertados: {} };
+    const estado: { alertados: Record<string, string> } = { alertados: {} };
     const enviar = vi.fn(async () => {});
 
     const erros = await despachar([umAlerta()], estado, "Livelo", AGORA, { credenciais: () => null, enviar });
@@ -51,7 +51,7 @@ describe("despachar", () => {
   });
 
   it("não marca nada quando o envio falha", async () => {
-    const estado = { alertados: {} };
+    const estado: { alertados: Record<string, string> } = { alertados: {} };
     const enviar = vi.fn(async () => {
       throw new Error("Telegram respondeu 401");
     });

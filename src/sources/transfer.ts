@@ -5,15 +5,55 @@ import { colher, extrairNextData, semHtml } from "../core/next-data.js";
 import { parseJanelaTexto } from "../core/datas.js";
 import { FonteQuebrada, type OfertaTransferencia, type TierBonus } from "../core/types.js";
 
-export const URL_LISTA_TRANSFERENCIA = "https://www.livelo.com.br/livelo-para-parceiros";
 const BASE = "https://www.livelo.com.br";
 
-const ParceiroLista = z
+/**
+ * A descoberta dos parceiros vem do sitemap, não de um componente de CMS.
+ *
+ * A primeira versão lia `listPartners` da página `/livelo-para-parceiros`; em set/2026
+ * a Livelo refez essa página como artigo/FAQ e o componente sumiu, derrubando o
+ * monitoramento de transferência inteiro. Sitemap é contrato de SEO — sobrevive a
+ * redesenho de página.
+ */
+export const URL_SITEMAP = "https://www.livelo.com.br/sitemap/static-sitemap-0.xml";
+
+/** `/livelo-para-parceiros/<slug>/<sku>` — a página índice, sem sku, não entra. */
+const RE_URL_PARCEIRO = /<loc>\s*(https?:\/\/[^<\s]*\/livelo-para-parceiros\/([^/<\s]+)\/([^/<\s]+))\s*<\/loc>/gi;
+
+/**
+ * Rede de segurança para quando a descoberta falhar: sem isto, uma mudança no sitemap
+ * zera os alertas de transferência em silêncio. Com isto, o pior caso é não enxergar
+ * um parceiro recém-criado.
+ */
+const PARCEIROS_FALLBACK: readonly ParceiroTransferencia[] = [
+  ["azul", "AZLTransfer"],
+  ["smiles", "SMLTransfer"],
+  ["latam", "MTPTransfer"],
+  ["iberia", "LIVK0004"],
+  ["flying-blue", "LIVK0007"],
+  ["british-airways", "LIVK0003"],
+  ["milageplus", "LIVK0001"],
+  ["etihad", "LIVK0005"],
+  ["aeromexico", "LIVK0002"],
+  ["copa", "CPATransfer"],
+  ["accor", "ACRTransfer"],
+  ["hilton-honors", "HILTransfer"],
+  ["ihg", "LIVK0008"],
+  ["dotz", "DTZTransfer"],
+  ["seedz", "SEDTransfer"],
+].map(([slug, skuid]) => ({
+  slug: slug!,
+  skuid: skuid!,
+  url: `${BASE}/livelo-para-parceiros/${slug}/${skuid}`,
+}));
+
+/** Resposta de API embutida na página — mais estável que o conteúdo de CMS ao lado. */
+const PartnerApi = z
   .object({
-    skuid: z.string(),
-    nomeParceiro: z.string(),
-    redirectUrl: z.string(),
-    status: z.string().optional(),
+    productId: z.string(),
+    displayName: z.string(),
+    enable: z.boolean().optional(),
+    maintenanceEnable: z.boolean().optional(),
   })
   .loose();
 
@@ -29,22 +69,29 @@ const Campanha = z
 
 const ComCampanha = z.object({ campaign: Campanha }).loose();
 
-export type ParceiroTransferencia = { skuid: string; nome: string; url: string };
+export type ParceiroTransferencia = { skuid: string; slug: string; url: string; nome?: string };
 
-export function parseListaParceiros(html: string): ParceiroTransferencia[] {
-  const encontrados = colher(extrairNextData(html), ParceiroLista);
-  if (encontrados.length === 0) throw new Error("lista de parceiros de transferência vazia — payload mudou");
-
+export function parseSitemapParceiros(xml: string): ParceiroTransferencia[] {
   const porSku = new Map<string, ParceiroTransferencia>();
-  for (const p of encontrados) {
-    if (p.status && p.status.toLowerCase() !== "ativo") continue;
-    porSku.set(p.skuid, {
-      skuid: p.skuid,
-      nome: p.nomeParceiro.trim(),
-      url: p.redirectUrl.startsWith("http") ? p.redirectUrl : `${BASE}${p.redirectUrl}`,
-    });
+
+  for (const [, url, slug, skuid] of xml.matchAll(RE_URL_PARCEIRO)) {
+    porSku.set(skuid!, { skuid: skuid!, slug: slug!, url: url! });
   }
+
   return [...porSku.values()];
+}
+
+/** Usa o sitemap; se ele falhar ou vier raso demais, cai na lista conhecida. */
+export async function descobrirParceiros(): Promise<ParceiroTransferencia[]> {
+  try {
+    const doSitemap = parseSitemapParceiros(await buscarTexto(URL_SITEMAP));
+    if (doSitemap.length >= 5) return doSitemap;
+    console.warn(`sitemap devolveu só ${doSitemap.length} parceiro(s); usando a lista conhecida`);
+  } catch (erro) {
+    console.warn(`descoberta pelo sitemap falhou (${erro instanceof Error ? erro.message : String(erro)}); usando a lista conhecida`);
+  }
+
+  return [...PARCEIROS_FALLBACK];
 }
 
 /** Placeholder de template que a Livelo deixa na página quando não há campanha ativa. */
@@ -160,8 +207,19 @@ export function parsePaginaParceiro(
   agora = new Date(),
   meusClubes: PerfilClubes = clubesDoPerfil(),
 ): OfertaTransferencia | null {
-  const [encontrado] = colher(extrairNextData(html), ComCampanha);
-  if (!encontrado) throw new Error(`campanha não encontrada na página de ${parceiro.nome}`);
+  const raiz = extrairNextData(html);
+  const [api] = colher(raiz, PartnerApi);
+  const [encontrado] = colher(raiz, ComCampanha);
+  const rotulo = api?.displayName ?? parceiro.nome ?? parceiro.slug;
+
+  // URL órfã no sitemap: responde 200 mas não é página de parceiro. Não é quebra.
+  if (!api && !encontrado) return null;
+
+  // Com a API presente e a campanha ausente, aí sim o payload mudou de forma.
+  if (!encontrado) throw new Error(`objeto campaign não encontrado na página de ${rotulo}`);
+
+  // Parceiro desativado ou em manutenção não deve virar alerta.
+  if (api?.enable === false || api?.maintenanceEnable === true) return null;
 
   const c = encontrado.campaign;
   const descricao = c.longDescription ?? "";
@@ -190,8 +248,8 @@ export function parsePaginaParceiro(
   return {
     tipo: "transferencia",
     id: parceiro.skuid,
-    parceiro: parceiro.nome,
-    programa: programaDe(parceiro.nome),
+    parceiro: rotulo,
+    programa: programaDe(rotulo, parceiro.slug),
     url: parceiro.url,
     tiers: tiers.length > 0 ? tiers : pctChamada ? [{ pct: pctChamada, condicao: "conforme a chamada da campanha" }] : [],
     meuBonusPct: meu?.pct ?? (tiers.length > 0 ? tiers[0]!.pct : pctChamada),
@@ -204,8 +262,9 @@ export function parsePaginaParceiro(
   };
 }
 
-export function programaDe(nomeParceiro: string): string | undefined {
-  const alvo = normalizar(nomeParceiro);
+/** Casa contra o nome exibido e contra o slug da URL, que muda menos. */
+export function programaDe(nomeParceiro: string, slug = ""): string | undefined {
+  const alvo = `${normalizar(nomeParceiro)} ${normalizar(slug).replace(/-/g, " ")}`;
   for (const [chave, p] of Object.entries(config.programas)) {
     if (p.aliases.some((a) => alvo.includes(normalizar(a)))) return chave;
   }
@@ -213,17 +272,30 @@ export function programaDe(nomeParceiro: string): string | undefined {
 }
 
 export async function coletarTransferencias(): Promise<OfertaTransferencia[]> {
-  try {
-    const parceiros = parseListaParceiros(await buscarTexto(URL_LISTA_TRANSFERENCIA));
+  const parceiros = await descobrirParceiros();
 
-    // O flag `campanhaAtiva` da listagem já veio `false` com campanha ativa em curso,
-    // então cada página precisa ser visitada — 15 requisições por rodada.
-    const resultados = await emSerie(parceiros, 400, async (p) =>
-      parsePaginaParceiro(await buscarTexto(p.url), p),
+  // Não há atalho: o flag `campanhaAtiva` da listagem já veio `false` com campanha
+  // ativa em curso, então cada página é visitada a cada rodada.
+  const resultados = await emSerie(parceiros, 400, async (p) => {
+    try {
+      return { oferta: parsePaginaParceiro(await buscarTexto(p.url), p) };
+    } catch (erro) {
+      return { erro: erro instanceof Error ? erro : new Error(String(erro)) };
+    }
+  });
+
+  const falhas = resultados.flatMap((r) => ("erro" in r && r.erro ? [r.erro] : []));
+
+  // Uma página fora do ar é rotina; um terço delas falhando é mudança estrutural.
+  const tolerancia = Math.max(1, Math.floor(parceiros.length / 3));
+  if (falhas.length > tolerancia) {
+    throw new FonteQuebrada(
+      "livelo-transferencia",
+      new Error(`${falhas.length}/${parceiros.length} páginas falharam: ${falhas[0]!.message}`),
     );
-
-    return resultados.filter((o): o is OfertaTransferencia => o !== null);
-  } catch (erro) {
-    throw new FonteQuebrada("livelo-transferencia", erro);
   }
+
+  for (const erro of falhas) console.warn(`parceiro ignorado nesta rodada: ${erro.message}`);
+
+  return resultados.flatMap((r) => ("oferta" in r && r.oferta ? [r.oferta] : []));
 }

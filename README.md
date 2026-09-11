@@ -15,7 +15,7 @@ Três fontes, a cada 30 minutos, via GitHub Actions:
 | Fonte | O que traz | Confiança |
 | --- | --- | --- |
 | `juntar-pontos/todos-os-parceiros` | 254 parceiros com paridade atual **e** paridade base (`parityBau`) | alta — dado estruturado |
-| 15 páginas de `livelo-para-parceiros/*` | campanhas de transferência com todas as faixas de bônus | alta — texto das regras |
+| 16 páginas de `livelo-para-parceiros/*` | campanhas de transferência com todas as faixas de bônus | alta — texto das regras |
 | RSS de blogs de milhas | compra de pontos, Clube e bônus segmentado | baixa — sinal para conferir |
 
 O site da Livelo é Next.js e serializa tudo em `<script id="__NEXT_DATA__">`. Não há login,
@@ -29,6 +29,12 @@ Duas armadilhas que o código já contorna:
   visitadas a cada rodada.
 - **Placeholder `{{bonus}}`.** Algumas páginas trazem o template não preenchido; isso é
   ausência de campanha, não campanha de 0%.
+- **Componente de CMS não serve para descoberta.** A lista de parceiros de transferência
+  vinha de `listPartners` na página `/livelo-para-parceiros`; em set/2026 a Livelo refez
+  essa página como artigo e o componente sumiu. A descoberta passou para o
+  **sitemap** (`/sitemap/static-sitemap-0.xml`), que é contrato de SEO, com uma lista
+  fixa de parceiros conhecidos como rede de segurança. O sitemap traz URL órfã — uma
+  página que responde 200 sem ser de parceiro é ignorada, não tratada como quebra.
 
 ## Configuração
 
