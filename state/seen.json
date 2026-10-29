@@ -1,9 +1,5 @@
 {
   "alertados": {
-    "shop:ALB:10:25:2026-09-16T02:59:00.000Z": "2026-09-14T04:03:31.470Z",
-    "shop:CEN:10:15:2026-09-17T02:59:00.000Z": "2026-09-14T04:03:31.470Z",
-    "shop:CRM:7:7:2026-09-17T02:59:00.000Z": "2026-09-14T04:03:31.470Z",
-    "shop:IND:1:6:2026-09-16T02:59:00.000Z": "2026-09-14T04:03:31.470Z",
     "xfer:SMLTransfer:80:2026-09-16T02:59:00.000Z": "2026-09-14T16:27:59.650Z",
     "blog:https://passageirodeprimeira.com/?p=566269": "2026-09-14T16:27:59.650Z",
     "shop:WMB:84:84:2026-09-16T02:59:00.000Z": "2026-09-15T07:20:42.819Z",
@@ -227,6 +223,7 @@
     "blog:https://passageirodeprimeira.com/?p=578149": "2026-10-28T17:15:58.617Z",
     "blog:https://passageirodeprimeira.com/?p=578184": "2026-10-28T21:50:35.357Z",
     "blog:https://passageirodeprimeira.com/?p=577193": "2026-10-28T21:50:35.357Z",
-    "blog:https://passageirodeprimeira.com/?p=578247": "2026-10-28T21:50:35.357Z"
+    "blog:https://passageirodeprimeira.com/?p=578247": "2026-10-28T21:50:35.357Z",
+    "shop:INS:20:20:2026-10-30T02:59:00.000Z": "2026-10-29T08:09:35.511Z"
   }
 }
