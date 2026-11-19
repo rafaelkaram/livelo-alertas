@@ -1,7 +1,5 @@
 {
   "alertados": {
-    "shop:WMB:84:84:2026-10-08T02:59:00.000Z": "2026-10-05T06:36:37.494Z",
-    "shop:DCR:20:20:2026-10-07T02:59:00.000Z": "2026-10-05T06:36:37.494Z",
     "xfer:AZLTransfer:40-70-75-80-90-100:sem-fim": "2026-10-05T15:38:01.472Z",
     "blog:https://passageirodeprimeira.com/?p=572093": "2026-10-05T15:38:01.472Z",
     "blog:https://passageirodeprimeira.com/?p=572075": "2026-10-05T15:38:01.472Z",
@@ -229,6 +227,9 @@
     "shop:BCR:25:28:2026-11-24T02:59:00.000Z": "2026-11-18T09:01:46.474Z",
     "blog:https://passageirodeprimeira.com/?p=583025": "2026-11-18T18:18:20.012Z",
     "blog:https://www.melhorescartoes.com.br/?p=143120": "2026-11-18T18:18:20.012Z",
-    "blog:https://www.melhorescartoes.com.br/?p=143124": "2026-11-18T18:18:20.012Z"
+    "blog:https://www.melhorescartoes.com.br/?p=143124": "2026-11-18T18:18:20.012Z",
+    "shop:AMO:10:12:2026-11-20T02:59:00.000Z": "2026-11-19T08:28:37.975Z",
+    "shop:OVC:6:12:2026-11-20T02:59:00.000Z": "2026-11-19T08:28:37.975Z",
+    "shop:MIS:8:10:2026-11-23T02:59:00.000Z": "2026-11-19T08:28:37.975Z"
   }
 }
